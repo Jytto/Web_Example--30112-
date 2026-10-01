@@ -3,294 +3,133 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
-<!-- (1) 여기에 페이지 이름 --> (가제)
-  <title>새 페이지</title>
-
+  <title>공부 플래너</title>
   <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/study-planner.css">
 </head>
 
-<!-- (2) 로그인해야 볼 수 있는 페이지면 data-require-auth="true"남기고,
-        누구나 볼 수 있으면 그 부분 지우기 -->
 <body data-require-auth="true">
-
   <header id="nav"></header>
 
-  <main>
-    <h1>새 페이지</h1>
-
-<!-- (3) 여기서부터는 자유롭게 만드시면 됩니다~~ -->
-    <section class="card">
-      <p>
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, Check, ChevronLeft, ChevronRight, Clock3, Flame, Pause, Play, Plus, RotateCcw, Target, Trash2, Trophy, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-
-const SUBJECTS = [
-  { name: "국어", color: "#8b5cf6" },
-  { name: "수학", color: "#3b82f6" },
-  { name: "영어", color: "#10b981" },
-  { name: "과학", color: "#f59e0b" },
-  { name: "사회", color: "#f43f5e" },
-  { name: "기타", color: "#64748b" },
-];
-
-const MODE_MINUTES = { focus: 25, short: 5, long: 15 };
-const MODE_LABELS = { focus: "집중", short: "짧은 휴식", long: "긴 휴식" };
-
-function pad(n) { return String(n).padStart(2, "0"); }
-function dateKey(d = new Date()) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
-function uid() { return `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
-
-export default function StudyPlanner() {
-  const [tasks, setTasks] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("study-tasks")) || []; } catch { return []; }
-  });
-  const [sessions, setSessions] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("study-sessions")) || []; } catch { return []; }
-  });
-  const [formOpen, setFormOpen] = useState(false);
-  const [filter, setFilter] = useState("전체");
-  const [form, setForm] = useState({ title: "", subject: "수학", due: dateKey(), priority: "보통" });
-
-  const [mode, setMode] = useState("focus");
-  const [seconds, setSeconds] = useState(MODE_MINUTES.focus * 60);
-  const [running, setRunning] = useState(false);
-  const [timerSubject, setTimerSubject] = useState("수학");
-  const intervalRef = useRef(null);
-
-  const [weekOffset, setWeekOffset] = useState(0);
-
-  useEffect(() => localStorage.setItem("study-tasks", JSON.stringify(tasks)), [tasks]);
-  useEffect(() => localStorage.setItem("study-sessions", JSON.stringify(sessions)), [sessions]);
-
-  useEffect(() => {
-    if (!running) return;
-    intervalRef.current = setInterval(() => {
-      setSeconds(prev => {
-        if (prev <= 1) {
-          clearInterval(intervalRef.current);
-          setRunning(false);
-          if (mode === "focus") {
-            setSessions(s => [...s, { id: uid(), subject: timerSubject, minutes: MODE_MINUTES.focus, date: dateKey(), createdAt: Date.now() }]);
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(intervalRef.current);
-  }, [running, mode, timerSubject]);
-
-  function switchMode(next) {
-    setRunning(false);
-    setMode(next);
-    setSeconds(MODE_MINUTES[next] * 60);
-  }
-
-  function resetTimer() {
-    setRunning(false);
-    setSeconds(MODE_MINUTES[mode] * 60);
-  }
-
-  function addTask(e) {
-    e.preventDefault();
-    if (!form.title.trim()) return;
-    setTasks(t => [{ id: uid(), ...form, title: form.title.trim(), done: false, createdAt: Date.now() }, ...t]);
-    setForm(f => ({ ...f, title: "" }));
-    setFormOpen(false);
-  }
-
-  const filteredTasks = useMemo(() => {
-    if (filter === "전체") return tasks;
-    if (filter === "완료") return tasks.filter(t => t.done);
-    if (filter === "할 일") return tasks.filter(t => !t.done);
-    return tasks.filter(t => t.subject === filter);
-  }, [tasks, filter]);
-
-  const today = dateKey();
-  const todayTasks = tasks.filter(t => t.due === today);
-  const doneToday = todayTasks.filter(t => t.done).length;
-  const completion = todayTasks.length ? Math.round(doneToday / todayTasks.length * 100) : 0;
-  const todayMinutes = sessions.filter(s => s.date === today).reduce((a, b) => a + b.minutes, 0);
-  const totalDone = tasks.filter(t => t.done).length;
-
-  const weekDays = useMemo(() => {
-    const now = new Date();
-    const day = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((day + 6) % 7) + weekOffset * 7);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const key = dateKey(d);
-      const minutes = sessions.filter(s => s.date === key).reduce((a, b) => a + b.minutes, 0);
-      return { key, label: ["월", "화", "수", "목", "금", "토", "일"][i], day: d.getDate(), minutes };
-    });
-  }, [sessions, weekOffset]);
-
-  const maxMinutes = Math.max(60, ...weekDays.map(d => d.minutes));
-  const elapsed = MODE_MINUTES[mode] * 60 - seconds;
-  const timerProgress = elapsed / (MODE_MINUTES[mode] * 60) * 100;
-  const circumference = 2 * Math.PI * 126;
-
-  return (
-    <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
-      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200"><BookOpen className="h-5 w-5" /></span>
-            <div><h1 className="text-xl font-black tracking-tight">Study Flow</h1><p className="text-xs text-slate-400">오늘도 한 걸음씩</p></div>
-          </div>
-          <Button onClick={() => setFormOpen(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-700"><Plus className="mr-2 h-4 w-4" />할 일 추가</Button>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-5 py-8">
-        <section className="mb-7">
-          <p className="font-semibold text-indigo-600">{new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" })}</p>
-          <h2 className="mt-1 text-3xl font-black sm:text-4xl">오늘의 공부를 시작해 볼까요?</h2>
-        </section>
-
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { icon: Clock3, label: "오늘 공부", value: `${todayMinutes}분`, color: "bg-blue-100 text-blue-600" },
-            { icon: Target, label: "오늘 할 일", value: `${doneToday}/${todayTasks.length}`, color: "bg-violet-100 text-violet-600" },
-            { icon: Trophy, label: "전체 완료", value: `${totalDone}개`, color: "bg-amber-100 text-amber-600" },
-            { icon: Flame, label: "오늘 달성률", value: `${completion}%`, color: "bg-rose-100 text-rose-600" },
-          ].map(({ icon: Icon, label, value, color }) => (
-            <Card key={label} className="rounded-3xl border-0 bg-white shadow-sm">
-              <CardContent className="flex items-center gap-4 p-5"><span className={`grid h-12 w-12 place-items-center rounded-2xl ${color}`}><Icon className="h-5 w-5" /></span><div><p className="text-sm text-slate-400">{label}</p><p className="text-2xl font-black">{value}</p></div></CardContent>
-            </Card>
-          ))}
-        </section>
-
-        <section className="mt-6 grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
-          <Card className="overflow-hidden rounded-[2rem] border-0 bg-gradient-to-br from-indigo-700 via-indigo-700 to-violet-800 text-white shadow-xl shadow-indigo-100">
-            <CardContent className="p-7">
-              <div className="flex justify-between gap-2 rounded-2xl bg-white/10 p-1.5">
-                {Object.keys(MODE_MINUTES).map(m => <button key={m} onClick={() => switchMode(m)} className={`flex-1 rounded-xl px-2 py-2 text-sm font-bold transition ${mode === m ? "bg-white text-indigo-700" : "text-indigo-100 hover:bg-white/10"}`}>{MODE_LABELS[m]}</button>)}
-              </div>
-
-              <div className="relative mx-auto mt-8 grid h-72 w-72 place-items-center">
-                <svg className="absolute inset-0 -rotate-90" width="288" height="288" viewBox="0 0 288 288">
-                  <circle cx="144" cy="144" r="126" fill="none" stroke="rgba(255,255,255,.14)" strokeWidth="12" />
-                  <circle cx="144" cy="144" r="126" fill="none" stroke="white" strokeLinecap="round" strokeWidth="12" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - timerProgress / 100)} className="transition-all duration-500" />
-                </svg>
-                <div className="text-center"><p className="text-sm font-bold text-indigo-200">{MODE_LABELS[mode]} 시간</p><p className="mt-1 text-6xl font-black tabular-nums">{pad(Math.floor(seconds / 60))}:{pad(seconds % 60)}</p><p className="mt-3 text-sm text-indigo-200">{running ? "집중하고 있어요" : seconds === 0 ? "완료했어요!" : "준비되면 시작하세요"}</p></div>
-              </div>
-
-              <div className="mx-auto mt-3 flex max-w-xs items-center gap-3">
-                <select value={timerSubject} onChange={e => setTimerSubject(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm font-bold text-white outline-none [&>option]:text-slate-900">{SUBJECTS.map(s => <option key={s.name}>{s.name}</option>)}</select>
-                <button onClick={() => setRunning(v => !v)} disabled={seconds === 0} className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white text-indigo-700 shadow-lg disabled:opacity-40">{running ? <Pause className="fill-current" /> : <Play className="ml-1 fill-current" />}</button>
-                <button onClick={resetTimer} className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/10 hover:bg-white/20"><RotateCcw className="h-5 w-5" /></button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[2rem] border-0 bg-white shadow-sm">
-            <CardContent className="p-7">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div><p className="text-sm font-bold text-indigo-600">WEEKLY REPORT</p><h3 className="text-2xl font-black">주간 공부 기록</h3></div>
-                <div className="flex items-center gap-1"><button onClick={() => setWeekOffset(v => v - 1)} className="rounded-lg p-2 hover:bg-slate-100"><ChevronLeft /></button><button onClick={() => setWeekOffset(0)} className="rounded-lg px-3 py-2 text-sm font-bold hover:bg-slate-100">이번 주</button><button onClick={() => setWeekOffset(v => v + 1)} className="rounded-lg p-2 hover:bg-slate-100"><ChevronRight /></button></div>
-              </div>
-
-              <div className="mt-8 flex h-64 items-end gap-3 border-b border-slate-100 px-1">
-                {weekDays.map(d => <div key={d.key} className="flex h-full flex-1 flex-col items-center justify-end gap-2"><span className="text-xs font-bold text-slate-400">{d.minutes ? `${d.minutes}분` : ""}</span><motion.div initial={{ height: 0 }} animate={{ height: `${Math.max(d.minutes ? 8 : 2, d.minutes / maxMinutes * 75)}%` }} className={`w-full max-w-10 rounded-t-xl ${d.key === today ? "bg-indigo-600" : "bg-indigo-200"}`} /><div className="pb-3 text-center"><p className={`text-sm font-bold ${d.key === today ? "text-indigo-600" : "text-slate-500"}`}>{d.label}</p><p className="text-xs text-slate-300">{d.day}</p></div></div>)}
-              </div>
-              <div className="mt-6 rounded-2xl bg-slate-50 p-4"><p className="text-sm text-slate-500">이번 주 총 공부 시간</p><p className="mt-1 text-2xl font-black text-indigo-600">{weekDays.reduce((a, d) => a + d.minutes, 0)}분</p></div>
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="mt-6">
-          <Card className="rounded-[2rem] border-0 bg-white shadow-sm">
-            <CardContent className="p-6 sm:p-7">
-              <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-                <div><p className="text-sm font-bold text-indigo-600">TASK PLANNER</p><h3 className="text-2xl font-black">공부 할 일</h3></div>
-                <div className="flex gap-2 overflow-x-auto pb-1">{["전체", "할 일", "완료", ...SUBJECTS.map(s => s.name)].map(x => <button key={x} onClick={() => setFilter(x)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${filter === x ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>{x}</button>)}</div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <AnimatePresence initial={false}>
-                  {filteredTasks.map(task => {
-                    const subject = SUBJECTS.find(s => s.name === task.subject) || SUBJECTS.at(-1);
-                    const overdue = !task.done && task.due < today;
-                    return <motion.div layout key={task.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 30 }} className={`flex items-center gap-4 rounded-2xl border p-4 ${task.done ? "border-slate-100 bg-slate-50 opacity-65" : "border-slate-100 bg-white hover:border-indigo-200"}`}>
-                      <button onClick={() => setTasks(ts => ts.map(t => t.id === task.id ? { ...t, done: !t.done } : t))} className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${task.done ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300"}`}>{task.done && <Check className="h-4 w-4" />}</button>
-                      <span className="h-10 w-1 shrink-0 rounded-full" style={{ backgroundColor: subject.color }} />
-                      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className={`font-bold ${task.done ? "line-through" : ""}`}>{task.title}</p><span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ color: subject.color, backgroundColor: `${subject.color}18` }}>{task.subject}</span>{task.priority === "높음" && <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-500">중요</span>}</div><p className={`mt-1 text-xs ${overdue ? "font-bold text-rose-500" : "text-slate-400"}`}>{task.due}{overdue ? " · 마감 지남" : ""}</p></div>
-                      <button onClick={() => setTasks(ts => ts.filter(t => t.id !== task.id))} className="rounded-lg p-2 text-slate-300 hover:bg-rose-50 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
-                    </motion.div>;
-                  })}
-                </AnimatePresence>
-                {!filteredTasks.length && <div className="rounded-2xl border border-dashed border-slate-200 py-16 text-center"><Target className="mx-auto h-9 w-9 text-slate-300" /><p className="mt-3 font-bold text-slate-400">등록된 할 일이 없어요</p><button onClick={() => setFormOpen(true)} className="mt-2 text-sm font-bold text-indigo-600">첫 할 일 추가하기</button></div>}
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      </main>
-
-      <AnimatePresence>
-        {formOpen && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setFormOpen(false)} className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <motion.form initial={{ scale: .95, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .95 }} onSubmit={addTask} onClick={e => e.stopPropagation()} className="w-full max-w-lg rounded-[2rem] bg-white p-7 shadow-2xl">
-            <div className="flex items-center justify-between"><div><p className="text-sm font-bold text-indigo-600">NEW TASK</p><h3 className="text-2xl font-black">새 할 일 추가</h3></div><button type="button" onClick={() => setFormOpen(false)} className="rounded-xl p-2 hover:bg-slate-100"><X /></button></div>
-            <label className="mt-6 block text-sm font-bold">할 일</label><input autoFocus value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="예: 수학 문제집 20쪽 풀기" className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500" />
-            <div className="mt-4 grid gap-4 sm:grid-cols-2"><div><label className="block text-sm font-bold">과목</label><select value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none">{SUBJECTS.map(s => <option key={s.name}>{s.name}</option>)}</select></div><div><label className="block text-sm font-bold">중요도</label><select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none"><option>낮음</option><option>보통</option><option>높음</option></select></div></div>
-            <label className="mt-4 block text-sm font-bold">마감일</label><input type="date" value={form.due} onChange={e => setForm({ ...form, due: e.target.value })} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500" />
-            <Button type="submit" className="mt-6 w-full rounded-xl bg-indigo-600 py-6 text-base hover:bg-indigo-700">할 일 저장</Button>
-          </motion.form>
-        </motion.div>}
-      </AnimatePresence>
-    </div>
-  );
-}
-</p>
+  <main class="study-page">
+    <section class="study-intro" aria-labelledby="pageTitle">
+      <p id="todayDate" class="study-date"></p>
+      <h1 id="pageTitle">오늘의 공부를 시작해 볼까요?</h1>
     </section>
 
+    <section class="study-stats" aria-label="오늘의 공부 요약">
+      <article class="study-stat">
+        <span class="study-stat-icon" aria-hidden="true">◷</span>
+        <div><p class="study-stat-label">오늘 공부</p><p id="todayMinutes" class="study-stat-value">0분</p></div>
+      </article>
+      <article class="study-stat">
+        <span class="study-stat-icon" aria-hidden="true">◎</span>
+        <div><p class="study-stat-label">오늘 할 일</p><p id="todayTasks" class="study-stat-value">0/0</p></div>
+      </article>
+      <article class="study-stat">
+        <span class="study-stat-icon" aria-hidden="true">★</span>
+        <div><p class="study-stat-label">전체 완료</p><p id="totalDone" class="study-stat-value">0개</p></div>
+      </article>
+      <article class="study-stat">
+        <span class="study-stat-icon" aria-hidden="true">↗</span>
+        <div><p class="study-stat-label">오늘 달성률</p><p id="todayCompletion" class="study-stat-value">0%</p></div>
+      </article>
+    </section>
+
+    <section class="study-columns" aria-label="타이머와 주간 공부 기록">
+      <article class="study-panel study-timer-panel">
+        <div id="timerModes" class="study-mode-tabs" role="group" aria-label="타이머 모드">
+          <button type="button" class="is-active" data-mode="focus" aria-pressed="true">집중</button>
+          <button type="button" data-mode="short" aria-pressed="false">짧은 휴식</button>
+          <button type="button" data-mode="long" aria-pressed="false">긴 휴식</button>
+        </div>
+
+        <div class="study-clock">
+          <svg viewBox="0 0 256 256" aria-hidden="true">
+            <circle class="study-clock-track" cx="128" cy="128" r="112"></circle>
+            <circle id="timerRingProgress" class="study-clock-progress" cx="128" cy="128" r="112" stroke-dasharray="703.72" stroke-dashoffset="703.72"></circle>
+          </svg>
+          <div class="study-clock-copy" aria-live="polite">
+            <p id="timerModeLabel" class="study-clock-mode">집중 시간</p>
+            <p id="timerDisplay" class="study-clock-time">25:00</p>
+            <p id="timerStatus" class="study-clock-status">준비되면 시작하세요</p>
+          </div>
+        </div>
+
+        <div class="study-timer-controls">
+          <select id="timerSubject" aria-label="공부 과목">
+            <option>국어</option><option selected>수학</option><option>영어</option>
+            <option>과학</option><option>사회</option><option>기타</option>
+          </select>
+          <button id="timerToggle" class="study-timer-start" type="button" aria-label="타이머 시작">시작</button>
+          <button id="timerReset" class="study-timer-reset" type="button" aria-label="타이머 초기화" title="초기화">↺</button>
+        </div>
+      </article>
+
+      <article class="study-panel study-week-panel">
+        <div class="study-panel-heading">
+          <div>
+            <p class="study-eyebrow">WEEKLY REPORT</p>
+            <h2>주간 공부 기록</h2>
+          </div>
+          <div class="study-week-nav" aria-label="주간 기록 탐색">
+            <button id="weekPrevious" type="button" aria-label="이전 주">‹</button>
+            <button id="weekCurrent" class="study-week-current" type="button">이번 주</button>
+            <button id="weekNext" type="button" aria-label="다음 주">›</button>
+          </div>
+        </div>
+        <div id="weekChart" class="study-week-chart" role="img" aria-label="요일별 공부 시간 막대 그래프"></div>
+        <div class="study-week-total"><span>이번 주 총 공부 시간</span><strong id="weekTotal">0분</strong></div>
+      </article>
+    </section>
+
+    <section class="study-panel study-task-panel" aria-labelledby="taskHeading">
+      <div class="study-panel-heading study-task-heading">
+        <div class="study-panel-heading-title">
+          <p class="study-eyebrow">TASK PLANNER</p>
+          <h2 id="taskHeading">공부 할 일</h2>
+        </div>
+        <button id="openTaskForm" class="study-add-button" type="button"><span aria-hidden="true">+</span> 할 일 추가</button>
+      </div>
+      <div id="taskFilters" class="study-filters" aria-label="할 일 필터"></div>
+      <ul id="taskList" class="study-task-list" aria-live="polite"></ul>
+      <div id="taskEmpty" class="study-empty" hidden>
+        <span class="study-empty-mark" aria-hidden="true">◎</span>
+        <p>등록된 할 일이 없어요</p>
+        <button id="emptyAddTask" type="button">첫 할 일 추가하기</button>
+      </div>
+    </section>
   </main>
+
+  <dialog id="taskDialog" class="study-dialog" aria-labelledby="taskDialogTitle">
+    <form id="taskForm" class="study-dialog-form">
+      <div class="study-dialog-heading">
+        <div><p class="study-eyebrow">NEW TASK</p><h2 id="taskDialogTitle">새 할 일 추가</h2></div>
+        <button id="closeTaskForm" class="study-dialog-close" type="button" aria-label="닫기">×</button>
+      </div>
+      <label for="taskTitle">할 일</label>
+      <input id="taskTitle" name="title" type="text" maxlength="160" placeholder="예: 수학 문제집 20쪽 풀기" required>
+      <div class="study-form-grid">
+        <div class="study-field">
+          <label for="taskSubject">과목</label>
+          <select id="taskSubject" name="subject">
+            <option>국어</option><option selected>수학</option><option>영어</option>
+            <option>과학</option><option>사회</option><option>기타</option>
+          </select>
+        </div>
+        <div class="study-field">
+          <label for="taskPriority">중요도</label>
+          <select id="taskPriority" name="priority"><option>낮음</option><option selected>보통</option><option>높음</option></select>
+        </div>
+      </div>
+      <label for="taskDue">마감일</label>
+      <input id="taskDue" name="due" type="date" required>
+      <button class="study-save-button" type="submit">할 일 저장</button>
+    </form>
+  </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/static/js/common.js"></script>
-
-  <!-- (4) `새페이지.js` 부분을 이 파일 이름으로 바꿔 주세요 -->
-  <script src="/static/js/Web_Example (30112).js"></script>
-
+  <script src="/static/js/study-planner.js"></script>
 </body>
 </html>
-
-
-<!--
-=========================================================
- 새 페이지 만드는 순서 (4단계)
-=========================================================
-
- 1. 이 파일을 복사해서 pages/ 안에 새 이름으로 저장
-    예) pages/gallery.html
-
- 2. assets/js/ 안에 같은 이름의 JS 파일 만들기
-    예) assets/js/gallery.js
-
-    안에는 이렇게 써주세요
-
-      function onAuthReady() {
-        // 로그인 확인이 끝나면 여기가 자동으로 실행됨
-        // currentUser, db, askAI 그대로 쓸 수 있음
-      }
-
- 3. 위 (4) 부분의 script 주소를 새 JS 파일로 바꾸기
-
- 4. assets/js/common.js 의 MENU 목록에 한 줄 추가
-
-      const MENU = [
-        { name: "홈",      url: "/index.html" },
-        { name: "게시판",  url: "/pages/board.html" },
-        { name: "내 정보", url: "/pages/mypage.html" },
-        { name: "갤러리",  url: "/pages/gallery.html" },   ← 추가
-      ];
-
- 이것만 하면 메뉴, 로그인 유지, DB 연결, AI 호출 등 그대로 사용 가능함
-
--->

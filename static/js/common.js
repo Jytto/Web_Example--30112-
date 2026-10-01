@@ -26,6 +26,7 @@ const MENU = [
   { name: "홈", url: "/index.html" },
   { name: "게시판", url: "/pages/board.html" },
   { name: "내 정보", url: "/pages/mypage.html" },
+  { name: "공부 플래너", url: "/pages/_새페이지_템플릿.html" },
 ];
 
 function renderNav() {
